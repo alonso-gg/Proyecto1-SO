@@ -31,17 +31,10 @@ int main(int argc, char *argv[]){
 
     FILE* fp;
     fp = fopen("quijote.txt", "r");
-    if(fp==NULL){
-        printf("ERROR");
-        exit(1);
-    }else{
-        printf("gud");
-    }
+    if(fp==NULL){ exit(1); }
 
     if (regcomp(&regex, re, REG_NEWLINE))
         exit(EXIT_FAILURE);
-    else
-        printf("Regex compilada");
 
     for (int i=1; i<=NUM_PROCESS; i++) {
         if (fork() == 0){
@@ -65,13 +58,14 @@ int main(int argc, char *argv[]){
                 fseek(fp, j, SEEK_CUR);
 
                 actualPosition += j;      
-                printf("%d : %s", i, buffer);         
+                printf("%d : %s\n", i, buffer);        
 
                 msg.filePosition = actualPosition;
                 msg.type = 100;
                 msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition), IPC_NOWAIT);
+                exit(0); 
             }
-            exit(0); 
+            
         }
     }
 
@@ -85,6 +79,7 @@ int main(int argc, char *argv[]){
             printf("padre %d", actualPosition);
             actualPosition = msg.filePosition;
         }
+        exit(0); 
     }
 
     //wait(&status);
