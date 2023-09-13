@@ -43,15 +43,15 @@ int main(int argc, char *argv[]){
 
                 fseek(fp, msg.filePosition, SEEK_SET);
 
-                char buffer[100];
+                char buffer[BUFFER_SIZE];
 
                 fread(buffer, sizeof(char), sizeof(buffer), fp);
 
-                actualPosition = msg.filePosition + 100;
+                actualPosition = msg.filePosition + BUFFER_SIZE;
 
                 int j = 0;
-                while(buffer[99+j]!='\n'){
-                    buffer[99+j] = 0;
+                while(buffer[BUFFER_SIZE-1+j]!='\n'){
+                    buffer[BUFFER_SIZE-1+j] = 0;
                     j--;
                 }
 
@@ -63,9 +63,8 @@ int main(int argc, char *argv[]){
                 msg.filePosition = actualPosition;
                 msg.type = 100;
                 msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition), IPC_NOWAIT);
-                exit(0); 
             }
-            
+            exit(0); 
         }
     }
 
@@ -79,7 +78,6 @@ int main(int argc, char *argv[]){
             printf("padre %d", actualPosition);
             actualPosition = msg.filePosition;
         }
-        exit(0); 
     }
 
     //wait(&status);
