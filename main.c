@@ -15,7 +15,7 @@
 //Estructura del mensaje
 struct message {
   long type;
-  long filePosition;
+  int filePosition;
   char content[MSG_SIZE];
 } msg;
 
@@ -45,16 +45,16 @@ int main(int argc, char *argv[]){
 
     for (int i=1; i<=NUM_PROCESS; i++) {
         if (fork() == 0){
-            while(1){
+            for(int z=0; z<2; z++){
                 msgrcv(msqid, &msg, MSG_SIZE, i, 0);
 
-                fseek(fp, msg.filePosition-actualPosition, SEEK_CUR);
+                fseek(fp, msg.filePosition, SEEK_SET);
 
                 char buffer[100];
 
-                fread(buffer, sizeof(char), 100, fp);
+                fread(buffer, sizeof(char), sizeof(buffer), fp);
 
-                actualPosition += 100;
+                actualPosition = msg.filePosition + 100;
 
                 int j = 0;
                 while(buffer[99+j]!='\n'){
@@ -62,30 +62,32 @@ int main(int argc, char *argv[]){
                     j--;
                 }
 
+                fseek(fp, j, SEEK_CUR);
+
                 actualPosition += j;      
-                printf("proc: %d, pos: %d", i, actualPosition);         
+                printf("%d : %s", i, buffer);         
 
                 msg.filePosition = actualPosition;
                 msg.type = 100;
                 msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition), IPC_NOWAIT);
-
-                exit(0); 
             }
+            exit(0); 
         }
     }
 
-    while(1){
+    for(int z=0; z<2; z++){
         for (int i=1; i<=NUM_PROCESS; i++){
             msg.type = i;
             msg.filePosition = actualPosition;
             msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition), IPC_NOWAIT);
 
             msgrcv(msqid, &msg, MSG_SIZE, 100, 0);
+            printf("padre %d", actualPosition);
+            actualPosition = msg.filePosition;
         }
-        exit(0); 
     }
 
-    wait(&status);
+    //wait(&status);
     fclose(fp);
     exit(0); 
 }
