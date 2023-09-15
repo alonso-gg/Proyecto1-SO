@@ -9,7 +9,7 @@
 
 
 #define MSG_SIZE 128
-#define NUM_PROCESS 5
+#define NUM_PROCESS 20
 #define BUFFER_SIZE 8192
 #define ARRAY_SIZE(arr) (sizeof((arr)) / sizeof((arr)[0]))
 //Estructura del mensaje
@@ -17,26 +17,25 @@ struct message {
   long type;
   int filePosition;
   int Termino;
-  char content[MSG_SIZE];
+  int imprimir;
+  int hijo;
 } msg;
 
 int main(int argc, char *argv[]){
     pid_t fileSeekers[NUM_PROCESS];
     int status, actualPosition = 0;
 
-    key_t msqkey = 999;
+    key_t msqkey = 9992;
     int msqid = msgget(msqkey, IPC_CREAT | S_IRUSR | S_IWUSR);
 
     regex_t regex;
     const char* const re = "Mancha";
 
     regmatch_t  pmatch[1];
-
+    int hijo = 0;
     FILE* fp;
     fp = fopen("quijote.txt", "r");
     if(fp==NULL){ exit(1); }
-
-    char*inicioLinea;
 
     msg.Termino = 0;
     if (regcomp(&regex, re, REG_NEWLINE))
@@ -58,9 +57,7 @@ int main(int argc, char *argv[]){
                 char *inicioArchivo = buffer;
 
                 fread(buffer, sizeof(char), sizeof(buffer), fp);
-                if(feof(fp) != 0 ){
-                    msg.Termino =1;
-                }
+                
                 actualPosition = msg.filePosition + BUFFER_SIZE;
 
                 int j = 0;
@@ -71,15 +68,21 @@ int main(int argc, char *argv[]){
 
                 fseek(fp, j, SEEK_CUR);
 
-                actualPosition += j;      
-                msg.filePosition = actualPosition;
-                msg.type = 100;
-                msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition), IPC_NOWAIT);
-
+                
+                if(feof(fp) != 0 ){
+                    msg.Termino =1;
+                }
+                else{
+                    actualPosition += j;      
+                    msg.filePosition = actualPosition;
+                    msg.imprimir=0;
+                    msg.type = 100;
+                    msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition) + sizeof(msg.hijo) + sizeof(msg.imprimir) + sizeof(msg.Termino), IPC_NOWAIT);
+                }
 
                 //evaluar 
                 regoff_t    off, len;
-                for (unsigned int i = 0; ; i++) {
+                for (unsigned int k = 0; ; k++) {
                     if (regexec(&regex, inicioLInea, ARRAY_SIZE(pmatch), pmatch, 0))
                         break;
 
@@ -87,7 +90,7 @@ int main(int argc, char *argv[]){
                     
                      
                     finalLiena = inicioLInea;
-                    while( *(inicioLInea + pmatch[0].rm_so) != '\n' && inicioLInea + pmatch[0].rm_so !=  inicioArchivo){
+                    while( *(inicioLInea + pmatch[0].rm_so) != '\n' ){
                         pmatch[0].rm_so--;
                         len++;
                     }
@@ -95,39 +98,58 @@ int main(int argc, char *argv[]){
                         len++;
                         pmatch[0].rm_eo++;
                     }
-
-
+                    msg.imprimir = 1;
+                    msg.hijo =i;
+                    msg.type = 100;
+                    msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition) + sizeof(msg.hijo) + sizeof(msg.imprimir) + sizeof(msg.Termino), IPC_NOWAIT);
+                    msgrcv(msqid, &msg, MSG_SIZE, i+NUM_PROCESS, 0);
                     printf("%.*s\"\n", len, inicioLInea + pmatch[0].rm_so);
-
+                    msg.type =101;
+                    msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition) + sizeof(msg.hijo) + sizeof(msg.imprimir) + sizeof(msg.Termino), IPC_NOWAIT);
                     inicioLInea += pmatch[0].rm_so + len;
                 }
+                if(feof(fp)==0){
+                    msg.Termino =1;
+                    msg.type = 100;
+                    msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition) + sizeof(msg.hijo) + sizeof(msg.imprimir) + sizeof(msg.Termino), IPC_NOWAIT);
+                }
             }
-            exit(0); 
         }
     }
     
+    int i = 1;
+    msg.type = i;
+    msg.filePosition = actualPosition;
+    i++;
+    msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition), IPC_NOWAIT);
     while(1){
-        for (int i=1; i<=NUM_PROCESS; i++){
-            msg.type = i;
-            msg.filePosition = actualPosition;
-            msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition), IPC_NOWAIT);
-
-            msgrcv(msqid, &msg, MSG_SIZE, 100, 0);
-            if(msg.Termino ==1){
-                for (int j=1; j<=NUM_PROCESS; j++)
-                {
-                    msg.Termino =1;
-                    msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition), IPC_NOWAIT);
-                }
-                fclose(fp);
-                exit(0); 
-                
+       msgrcv(msqid, &msg, MSG_SIZE, 100, 0);
+        if(msg.Termino ==1){
+            for (int j=1; j<=NUM_PROCESS; j++)
+            {
+                msg.type = j;
+                msg.Termino =1;
+                msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition) + sizeof(msg.hijo) + sizeof(msg.imprimir) + sizeof(msg.Termino), IPC_NOWAIT);
             }
-            printf("%i",msg.filePosition);
-            actualPosition = msg.filePosition;
+            fclose(fp);
+            msgctl(msqkey, IPC_RMID, NULL);
+            exit(0); 
         }
+        else if(msg.imprimir ==1){
+            msg.type = msg.hijo +NUM_PROCESS;
+            msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition) + sizeof(msg.hijo) + sizeof(msg.imprimir) + sizeof(msg.Termino), IPC_NOWAIT);
+            msgrcv(msqid, &msg, MSG_SIZE, 101, 0);
+        }
+        else{
+            if(i == NUM_PROCESS){
+                i=1;
+            }
+            msg.type = i;
+            actualPosition = msg.filePosition;
+            msg.filePosition = actualPosition;
+            msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition) + sizeof(msg.hijo) + sizeof(msg.imprimir) + sizeof(msg.Termino), IPC_NOWAIT);
+        }
+       
     }
-
-    //wait(&status);
 
 }
