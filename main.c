@@ -28,7 +28,7 @@ int main(int argc, char *argv[]){
     int msqid = msgget(msqkey, IPC_CREAT | S_IRUSR | S_IWUSR);
 
     regex_t regex;
-    const char* const re = "The";
+    const char* const re = "Mancha";
 
     regmatch_t  pmatch[1];
 
@@ -97,7 +97,7 @@ int main(int argc, char *argv[]){
                     }
 
 
-                    printf("substring = \"%.*s\"\n", len, inicioLInea + pmatch[0].rm_so);
+                    printf("%.*s\"\n", len, inicioLInea + pmatch[0].rm_so);
 
                     inicioLInea += pmatch[0].rm_so + len;
                 }
@@ -119,14 +119,11 @@ int main(int argc, char *argv[]){
                     msg.Termino =1;
                     msgsnd(msqid, (void *)&msg, sizeof(msg.filePosition), IPC_NOWAIT);
                 }
-                for (int j=1; j<=NUM_PROCESS; j++)
-                {
-                    wait(&status);
-                }
                 fclose(fp);
                 exit(0); 
                 
             }
+            printf("%i",msg.filePosition);
             actualPosition = msg.filePosition;
         }
     }
