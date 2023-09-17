@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
                 msg.mensaje[3] = 0;
                 msg.type = 100;
 
-                msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
+                msgsnd(msqid, (void *)&msg, sizeof(msg), IPC_NOWAIT);
 
                 regoff_t len;
                 for (unsigned int k = 0;; k++) {
@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
 
                     strncpy(msg.contenido, inicioLinea + pmatch[0].rm_so, len);
 
-                    msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
+                    msgsnd(msqid, (void *)&msg, sizeof(msg), 0);
 
                     inicioLinea += pmatch[0].rm_so + len;
                 }
@@ -127,15 +127,16 @@ int main(int argc, char *argv[]) {
                 msg.mensaje[4] = i;
                 msg.type = 100;
 
-                msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
+                msgsnd(msqid, (void *)&msg, sizeof(msg), 0);
             }
         }
     }
+
     struct msqid_ds info;
     int i = 1;
     msg.type = i;
     msg.mensaje[0] = actualPosition;
-    msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
+    msgsnd(msqid, (void *)&msg, sizeof(msg), IPC_NOWAIT);
     int trabajando = 1;
     int hijosTrabajando = 1;
 
@@ -157,8 +158,7 @@ int main(int argc, char *argv[]) {
         }else if (msg.mensaje[2] == 1) {
             printf("%s\n", msg.contenido);
             fflush(stdout);
-            sleep(1);
-
+            //sleep(1);
         } else {
             hijos[i - 1] = 1;
             i++;
