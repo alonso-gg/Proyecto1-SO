@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define MSG_SIZE 128
-#define NUM_PROCESS 3
+#define NUM_PROCESS 100
 #define BUFFER_SIZE 8192
 #define ARRAY_SIZE(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
@@ -22,8 +22,8 @@ struct message {
 int main(int argc, char *argv[]) {
     int status, actualPosition = 0;
 
-    key_t msqkey = 7874;
-    int msqid = msgget(msqkey, IPC_CREAT| IPC_EXCL | 0666);
+    key_t msqkey = 7887;
+    int msqid = msgget(msqkey, IPC_CREAT | 0666);
     if (msqid == -1) {
         perror("msgget");
         exit(EXIT_FAILURE);
@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 fseek(fp, j, SEEK_CUR);
-                actualPosition += j;
+                actualPosition += j+1;
                 msg.mensaje[0] = actualPosition;
                 msg.mensaje[2] = 0;
                 msg.mensaje[3] = 0;
@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
                     len = pmatch[0].rm_eo - pmatch[0].rm_so;
 
                     finalLinea = inicioLinea;
-                    while (*(inicioLinea + pmatch[0].rm_so) != '\n') {
+                    while (*(inicioLinea + pmatch[0].rm_so) != '\n' || inicioArchivo != inicioArchivo) {
                         pmatch[0].rm_so--;
                         len++;
                     }
@@ -139,12 +139,11 @@ int main(int argc, char *argv[]) {
     int trabajando = 1;
     int hijosTrabajando = 1;
 
-    while (trabajando == 1 || hijosTrabajando == 1) {
+    while (trabajando == 1 || hijosTrabajando == 1 || info.msg_qnum == 0) {
         msgrcv(msqid, &msg, sizeof(msg), 100, 0);
         
         if (msg.mensaje[1] == 1 && trabajando==1) {
             trabajando = 0;
-            msgctl(msqid,IPC_STAT,&info);
             printf("Hijo termino, quedan %ld mensajes\n", info.msg_qnum);
             
         } else if (msg.mensaje[3] == 1) {
@@ -157,6 +156,8 @@ int main(int argc, char *argv[]) {
             }
         }else if (msg.mensaje[2] == 1) {
             printf("%s\n", msg.contenido);
+            fflush(stdout);
+            sleep(1);
 
         } else {
             hijos[i - 1] = 1;
@@ -169,6 +170,7 @@ int main(int argc, char *argv[]) {
             msg.mensaje[0] = actualPosition;
             msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
         }
+        msgctl(msqid,IPC_STAT,&info);
     }
 
     printf("Se salió del ciclo principal\n");
