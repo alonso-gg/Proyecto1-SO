@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define MSG_SIZE 128
-#define NUM_PROCESS 100
+#define NUM_PROCESS 5
 #define BUFFER_SIZE 8192
 #define ARRAY_SIZE(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
