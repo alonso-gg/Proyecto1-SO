@@ -7,7 +7,6 @@
 #include <sys/msg.h>
 #include <sys/stat.h>
 #include <string.h>
-#include <semaphore.h>
 
 #define MSG_SIZE 256
 #define NUM_PROCESS 5
@@ -17,21 +16,8 @@
 struct message {
     long type;
     int mensaje[5];
+    char contenido[MSG_SIZE]; // Agregamos contenido al mensaje
 } msg;
-
-// Definir el semáforo para coordinar printf
-sem_t *printMutex;
-
-void imprimir_mensaje(int numero_proceso, const char *mensaje) {
-    // Esperar por el semáforo antes de imprimir
-    sem_wait(printMutex);
-
-    // Imprimir el mensaje
-    printf("Proceso %d: %s\n", numero_proceso, mensaje);
-
-    // Liberar el semáforo después de imprimir
-    sem_post(printMutex);
-}
 
 int main(int argc, char *argv[]) {
     pid_t fileSeekers[NUM_PROCESS];
@@ -61,21 +47,6 @@ int main(int argc, char *argv[]) {
     int hijos[NUM_PROCESS];
     memset(hijos, 0, sizeof(hijos));
 
-    // Agregar un semáforo para la cola de mensajes
-    sem_t *mutex;
-    mutex = sem_open("/my_semaphore", O_CREAT | O_EXCL, 0666, 1);
-    if (mutex == SEM_FAILED) {
-        perror("sem_open");
-        exit(EXIT_FAILURE);
-    }
-
-    // Inicializar el semáforo para printf
-    printMutex = sem_open("/print_semaphore", O_CREAT | O_EXCL, 0666, 1);
-    if (printMutex == SEM_FAILED) {
-        perror("sem_open");
-        exit(EXIT_FAILURE);
-    }
-
     if (regcomp(&regex, re, REG_NEWLINE)) {
         perror("regcomp");
         exit(EXIT_FAILURE);
@@ -89,10 +60,7 @@ int main(int argc, char *argv[]) {
             char *inicioArchivo = buffer;
 
             while (1) {
-                // Utilizar el semáforo antes de acceder a la cola de mensajes
-                sem_wait(mutex);
-                msgrcv(msqid, &msg, MSG_SIZE, i, 0);
-                sem_post(mutex);
+                msgrcv(msqid, &msg, sizeof(msg) - sizeof(long), i, 0);
 
                 if (msg.mensaje[1] == 1) {
                     fclose(fp);
@@ -122,10 +90,7 @@ int main(int argc, char *argv[]) {
                 msg.mensaje[3] = 0;
                 msg.type = 100;
 
-                // Utilizar el semáforo antes de enviar un mensaje
-                sem_wait(mutex);
-                msgsnd(msqid, (void *)&msg, sizeof(msg.mensaje), IPC_NOWAIT);
-                sem_post(mutex);
+                msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
 
                 regoff_t off, len;
                 for (unsigned int k = 0;; k++) {
@@ -150,13 +115,10 @@ int main(int argc, char *argv[]) {
                     msg.mensaje[4] = i;
                     msg.type = 100;
 
-                    // Utilizar el semáforo antes de enviar un mensaje
-                    sem_wait(mutex);
-                    msgsnd(msqid, (void *)&msg, sizeof(msg.mensaje), 0);
-                    sem_post(mutex);
+                    // Copiamos el contenido al mensaje para que el padre lo imprima
+                    strncpy(msg.contenido, inicioLinea + pmatch[0].rm_so, MSG_SIZE);
 
-                    // Imprimir un mensaje usando la función personalizada
-                    imprimir_mensaje(i, inicioLinea + pmatch[0].rm_so);
+                    msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
 
                     inicioLinea += pmatch[0].rm_so + len;
                 }
@@ -167,10 +129,7 @@ int main(int argc, char *argv[]) {
                 msg.mensaje[4] = i;
                 msg.type = 100;
 
-                // Utilizar el semáforo antes de enviar un mensaje
-                sem_wait(mutex);
-                msgsnd(msqid, (void *)&msg, sizeof(msg.mensaje), IPC_NOWAIT);
-                sem_post(mutex);
+                msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
             }
         } else {
             hijos[i - 1] = 0;
@@ -180,17 +139,17 @@ int main(int argc, char *argv[]) {
     int i = 1;
     msg.type = i;
     msg.mensaje[0] = actualPosition;
-
-    // Utilizar el semáforo antes de enviar un mensaje
-    sem_wait(mutex);
-    msgsnd(msqid, (void *)&msg, sizeof(msg.mensaje), IPC_NOWAIT);
-    sem_post(mutex);
-
+    msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
     int trabajando = 1;
     int hijosTrabajando = 1;
 
     while (trabajando == 1 || hijosTrabajando == 1) {
-        msgrcv(msqid, &msg, MSG_SIZE, 100, 0);
+        msgrcv(msqid, &msg, sizeof(msg) - sizeof(long), 0, 0);
+
+        if (msg.mensaje[1] == 1) {
+            printf("Proceso %d: %s\n", msg.mensaje[4], msg.contenido);
+        }
+
         if (msg.mensaje[1] == 1) {
             trabajando = 0;
             printf("Hijo terminó\n");
@@ -203,6 +162,7 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+
         if (msg.mensaje[2] == 1) {
             // Handle msg.mensaje[2] == 1 case here
         } else {
@@ -214,11 +174,7 @@ int main(int argc, char *argv[]) {
             msg.type = i;
             actualPosition = msg.mensaje[0];
             msg.mensaje[0] = actualPosition;
-
-            // Utilizar el semáforo antes de enviar un mensaje
-            sem_wait(mutex);
-            msgsnd(msqid, (void *)&msg, sizeof(msg.mensaje), IPC_NOWAIT);
-            sem_post(mutex);
+            msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
         }
     }
 
@@ -228,20 +184,8 @@ int main(int argc, char *argv[]) {
     for (int j = 1; j < NUM_PROCESS; j++) {
         msg.type = j;
         msg.mensaje[1] = 1;
-
-        // Utilizar el semáforo antes de enviar un mensaje
-        sem_wait(mutex);
-        msgsnd(msqid, (void *)&msg, sizeof(msg.mensaje), 0);
-        sem_post(mutex);
+        msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
     }
-
-    // Cerrar y eliminar el semáforo para la cola de mensajes al final
-    sem_close(mutex);
-    sem_unlink("/my_semaphore");
-
-    // Cerrar y eliminar el semáforo de printf al final
-    sem_close(printMutex);
-    sem_unlink("/print_semaphore");
 
     fclose(fp);
     msgctl(msqkey, IPC_RMID, NULL);
