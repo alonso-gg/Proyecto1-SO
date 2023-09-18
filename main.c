@@ -10,7 +10,7 @@
 #include <errno.h>
 
 #define MSG_SIZE 128
-#define NUM_PROCESS 6
+#define NUM_PROCESS 10
 #define BUFFER_SIZE 8192
 #define ARRAY_SIZE(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
@@ -62,16 +62,15 @@ int main(int argc, char *argv[]) {
             if(i == NUM_PROCESS){
                 struct msqid_ds info;
                 int bandera = 1;
- 
-                while (bandera == 1 || info.msg_qnum == 0){
-                    msgrcv(msqid, &msg, sizeof(msg), 440, 0);
 
-                    if (msg.mensaje[1] == 1) {
-                        bandera = 0;
+                while (bandera == 1){
+                    if (msgrcv(msqid, &msg, sizeof(msg), 440, IPC_NOWAIT) != -1){
+                        if (msg.mensaje[1] == 1) {
+                            bandera = 0;
+                        }
+                        printf("%s\n", msg.contenido);
+                        msgctl(msqid,IPC_STAT,&info);
                     }
-
-                    printf("%s\n", msg.contenido);
-                    msgctl(msqid,IPC_STAT,&info);
                 }
 
                 fclose(fp);
@@ -118,12 +117,27 @@ int main(int argc, char *argv[]) {
 
                 //Analizar la regex
                 regoff_t len;
-                for (unsigned int k = 0;; k++) {
-                    if (regexec(&regex, inicioLinea, ARRAY_SIZE(pmatch), pmatch, 0)) {
-                        break;
+                char* tokens = strtok(buffer, "\n");
+
+                while (tokens != NULL) {
+                    if (regexec(&regex, tokens, 0, NULL, 0)==0) {
+                        msg.mensaje[2] = 0;
+                        msg.mensaje[1] = 0;
+                        msg.mensaje[3] = 0;
+                        msg.mensaje[4] = i;
+                        msg.type = 440;
+
+                        // Copiamos el contenido al mensaje para que el padre lo imprima
+                        memset(msg.contenido, 0, sizeof(msg.contenido));
+
+                        strcpy(msg.contenido, tokens);
+
+                        msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
                     }
 
-                    len = pmatch[0].rm_eo - pmatch[0].rm_so;
+                    tokens = strtok(NULL, "\n");
+
+                    /*len = pmatch[0].rm_eo - pmatch[0].rm_so;
 
                     finalLinea = inicioLinea;
                     while (*(inicioLinea + pmatch[0].rm_so) != '\n' || inicioArchivo != inicioArchivo) {
@@ -133,9 +147,9 @@ int main(int argc, char *argv[]) {
                     while (*(finalLinea + pmatch[0].rm_eo) != '\n') {
                         len++;
                         pmatch[0].rm_eo++;
-                    }
+                    }*/
 
-                    msg.mensaje[2] = 0;
+                    /*msg.mensaje[2] = 0;
                     msg.mensaje[1] = 0;
                     msg.mensaje[3] = 0;
                     msg.mensaje[4] = i;
@@ -148,7 +162,7 @@ int main(int argc, char *argv[]) {
 
                     msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
 
-                    inicioLinea += pmatch[0].rm_so + len;
+                    inicioLinea += pmatch[0].rm_so + len;*/
                 }
 
                 //Hijo listo para volver a leer
@@ -174,7 +188,7 @@ int main(int argc, char *argv[]) {
     while (trabajando == 1 || hijosTrabajando == 1) {
         msgrcv(msqid, &msg, sizeof(msg), 100, 0);
 
-        if (msg.mensaje[1] == 1 && trabajando==1) { //El archivo se terminó de leer
+        if (msg.mensaje[1] == 1) { //El archivo se terminó de leer
             trabajando = 0;
         } else if (msg.mensaje[3] == 1) { //Un hijo terminó de analizar
             hijos[msg.mensaje[4] - 1] = 0;
@@ -204,15 +218,17 @@ int main(int argc, char *argv[]) {
         msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
     }
 
+    //Espera a que todos los hijos terminen
+    for (int j = 1; j < NUM_PROCESS; j++) {
+        wait(&status);
+    }
+
     //Notifica al hijo pintor que ya puede terminar (exit/morir)
     msg.type = 440;
     msg.mensaje[1] = 1;
     msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
 
-    //Espera a que todos los hijos terminen
-    for (int j = 1; j <= NUM_PROCESS; j++) {
-        wait(&status);
-    }
+    wait(&status);
 
     //El padre termina
     fclose(fp);
