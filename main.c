@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define MSG_SIZE 128
-#define NUM_PROCESS 2
+#define NUM_PROCESS 100
 #define BUFFER_SIZE 8192
 #define ARRAY_SIZE(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
@@ -20,10 +20,9 @@ struct message {
 } msg;
 
 int main(int argc, char *argv[]) {
-
     int status, actualPosition = 0;
 
-    key_t msqkey = 7887;
+    key_t msqkey = 7893;
     int msqid = msgget(msqkey, IPC_CREAT | 0666);
     if (msqid == -1) {
         perror("msgget");
@@ -50,13 +49,29 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    for (int i = 1; i < NUM_PROCESS; i++) {
+    for (int i = 1; i <= NUM_PROCESS; i++) {
         if (fork() == 0) {
+            if(i == NUM_PROCESS){
+                struct msqid_ds info;
+                int bandera = 1;
+                while (bandera ==1 || info.msg_qnum == 0)
+                {
+                    msgrcv(msqid, &msg, sizeof(msg), 440, 0);
+
+                    if (msg.mensaje[1] == 1) {
+                        bandera =0;
+                    }
+                    printf("%s\n", msg.contenido);
+                    msgctl(msqid,IPC_STAT,&info);
+                }
+                
+                fclose(fp);
+                exit(0);
+            }
             char buffer[BUFFER_SIZE];
             char *inicioLinea = buffer;
             char *finalLinea = buffer;
             char *inicioArchivo = buffer;
-
             while (1) {
                 msgrcv(msqid, &msg, sizeof(msg), i, 0);
 
@@ -87,7 +102,7 @@ int main(int argc, char *argv[]) {
                 msg.mensaje[3] = 0;
                 msg.type = 100;
 
-                msgsnd(msqid, (void *)&msg, sizeof(msg), IPC_NOWAIT);
+                msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
 
                 regoff_t len;
                 for (unsigned int k = 0;; k++) {
@@ -106,18 +121,18 @@ int main(int argc, char *argv[]) {
                         len++;
                         pmatch[0].rm_eo++;
                     }
-                    msg.mensaje[2] = 1;
+                    msg.mensaje[2] = 0;
                     msg.mensaje[1] = 0;
                     msg.mensaje[3] = 0;
                     msg.mensaje[4] = i;
-                    msg.type = 100;
+                    msg.type = 440;
 
                     // Copiamos el contenido al mensaje para que el padre lo imprima
                     memset(msg.contenido, 0, sizeof(msg.contenido));
 
                     strncpy(msg.contenido, inicioLinea + pmatch[0].rm_so, len);
 
-                    msgsnd(msqid, (void *)&msg, sizeof(msg), 0);
+                    msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
 
                     inicioLinea += pmatch[0].rm_so + len;
                 }
@@ -128,38 +143,32 @@ int main(int argc, char *argv[]) {
                 msg.mensaje[4] = i;
                 msg.type = 100;
 
-                msgsnd(msqid, (void *)&msg, sizeof(msg), 0);
+                msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
             }
         }
     }
-
-    struct msqid_ds info;
+    
     int i = 1;
     msg.type = i;
     msg.mensaje[0] = actualPosition;
-    msgsnd(msqid, (void *)&msg, sizeof(msg), IPC_NOWAIT);
+    msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
     int trabajando = 1;
     int hijosTrabajando = 1;
 
-    while (trabajando == 1 || hijosTrabajando == 1 || info.msg_qnum == 0) {
+    while (trabajando == 1 || hijosTrabajando == 1) {
         msgrcv(msqid, &msg, sizeof(msg), 100, 0);
         
         if (msg.mensaje[1] == 1 && trabajando==1) {
             trabajando = 0;
-            //printf("Hijo termino, quedan %ld mensajes\n", info.msg_qnum);
             
         } else if (msg.mensaje[3] == 1) {
             hijos[msg.mensaje[4] - 1] = 0;
             hijosTrabajando = 0;
-            for (int j = 0; j < NUM_PROCESS; j++) {
+            for (int j = 0; j < NUM_PROCESS-1; j++) {
                 if (hijos[j] == 1) {
                     hijosTrabajando = 1;
                 }
             }
-        }else if (msg.mensaje[2] == 1) {
-            printf("%s\n", msg.contenido);
-            fflush(stdout);
-            //sleep(1);
         } else {
             hijos[i - 1] = 1;
             i++;
@@ -171,21 +180,22 @@ int main(int argc, char *argv[]) {
             msg.mensaje[0] = actualPosition;
             msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
         }
-        msgctl(msqid,IPC_STAT,&info);
     }
-
-    //printf("Se salió del ciclo principal\n");
 
     for (int j = 1; j < NUM_PROCESS; j++) {
         msg.type = j;
         msg.mensaje[1] = 1;
         msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
     }
-    for (int j = 1; j < NUM_PROCESS; j++) {
+    msg.type = 440;
+    msg.mensaje[1] = 1;
+    msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
+    for (int j = 1; j <= NUM_PROCESS; j++) {
         wait(&status);
     }
 
     fclose(fp);
     msgctl(msqkey, IPC_RMID, NULL);
+
     exit(0);
 }
