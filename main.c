@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define MSG_SIZE 128
-#define NUM_PROCESS 5
+#define NUM_PROCESS 2
 #define BUFFER_SIZE 8192
 #define ARRAY_SIZE(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
@@ -20,6 +20,7 @@ struct message {
 } msg;
 
 int main(int argc, char *argv[]) {
+
     int status, actualPosition = 0;
 
     key_t msqkey = 7887;
@@ -145,7 +146,7 @@ int main(int argc, char *argv[]) {
         
         if (msg.mensaje[1] == 1 && trabajando==1) {
             trabajando = 0;
-            printf("Hijo termino, quedan %ld mensajes\n", info.msg_qnum);
+            //printf("Hijo termino, quedan %ld mensajes\n", info.msg_qnum);
             
         } else if (msg.mensaje[3] == 1) {
             hijos[msg.mensaje[4] - 1] = 0;
@@ -173,7 +174,7 @@ int main(int argc, char *argv[]) {
         msgctl(msqid,IPC_STAT,&info);
     }
 
-    printf("Se salió del ciclo principal\n");
+    //printf("Se salió del ciclo principal\n");
 
     for (int j = 1; j < NUM_PROCESS; j++) {
         msg.type = j;
@@ -186,6 +187,5 @@ int main(int argc, char *argv[]) {
 
     fclose(fp);
     msgctl(msqkey, IPC_RMID, NULL);
-
     exit(0);
 }
