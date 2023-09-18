@@ -136,33 +136,6 @@ int main(int argc, char *argv[]) {
                     }
 
                     tokens = strtok(NULL, "\n");
-
-                    /*len = pmatch[0].rm_eo - pmatch[0].rm_so;
-
-                    finalLinea = inicioLinea;
-                    while (*(inicioLinea + pmatch[0].rm_so) != '\n' || inicioArchivo != inicioArchivo) {
-                        pmatch[0].rm_so--;
-                        len++;
-                    }
-                    while (*(finalLinea + pmatch[0].rm_eo) != '\n') {
-                        len++;
-                        pmatch[0].rm_eo++;
-                    }*/
-
-                    /*msg.mensaje[2] = 0;
-                    msg.mensaje[1] = 0;
-                    msg.mensaje[3] = 0;
-                    msg.mensaje[4] = i;
-                    msg.type = 440;
-
-                    // Copiamos el contenido al mensaje para que el padre lo imprima
-                    memset(msg.contenido, 0, sizeof(msg.contenido));
-
-                    strncpy(msg.contenido, inicioLinea + pmatch[0].rm_so, len);
-
-                    msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
-
-                    inicioLinea += pmatch[0].rm_so + len;*/
                 }
 
                 //Hijo listo para volver a leer
