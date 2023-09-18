@@ -22,7 +22,7 @@ struct message {
 int main(int argc, char *argv[]) {
     int status, actualPosition = 0;
 
-    key_t msqkey = 7892;
+    key_t msqkey = 7893;
     int msqid = msgget(msqkey, IPC_CREAT | 0666);
     if (msqid == -1) {
         perror("msgget");
@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
 
                     strncpy(msg.contenido, inicioLinea + pmatch[0].rm_so, len);
 
-                    msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
+                    msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
 
                     inicioLinea += pmatch[0].rm_so + len;
                 }
