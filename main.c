@@ -10,7 +10,7 @@
 #include <errno.h>
 
 #define MSG_SIZE 128
-#define NUM_PROCESS 10
+#define NUM_PROCESS 6
 #define BUFFER_SIZE 8192
 #define ARRAY_SIZE(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
