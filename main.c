@@ -10,7 +10,7 @@
 #include <errno.h>
 
 #define MSG_SIZE 128
-#define NUM_PROCESS 6
+#define NUM_PROCESS 10
 #define BUFFER_SIZE 8192
 #define ARRAY_SIZE(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
 
     regmatch_t pmatch[1];
 
-    if (regcomp(&regex, re, REG_NEWLINE)) {
+    if (regcomp(&regex, re, REG_NEWLINE|REG_EXTENDED)) {
         perror("regcomp");
         exit(EXIT_FAILURE);
     }
@@ -83,8 +83,10 @@ int main(int argc, char *argv[]) {
             char *finalLinea = buffer;
             char *inicioArchivo = buffer;
             while (1) {
+                //Espera mensaje para leer
                 msgrcv(msqid, &msg, sizeof(msg), i, 0);
 
+                //Si ya se terminó de leer todo el archivo, el hijo se sale
                 if (msg.mensaje[1] == 1) {
                     fclose(fp);
                     exit(0);
@@ -94,12 +96,15 @@ int main(int argc, char *argv[]) {
                 fseek(fp, msg.mensaje[0], SEEK_SET);
                 size_t bytesRead = fread(buffer, sizeof(char), sizeof(buffer), fp);
 
+                //Si leyó menos de 8K es porque llegó al fin de línea
                 if (bytesRead != sizeof(buffer)) {
                     msg.mensaje[1] = 1;
                 }
 
+                //Suma lo que leyó a la posición anterior
                 actualPosition = msg.mensaje[0] + bytesRead;
 
+                //Recorta el buffer hasta la última línea completa
                 int j = 0;
                 while (buffer[bytesRead + j] != '\n') {
                     buffer[bytesRead + j] = 0;
@@ -108,6 +113,8 @@ int main(int argc, char *argv[]) {
 
                 fseek(fp, j, SEEK_CUR);
                 actualPosition += j+1;
+
+                //Envía el mensaje al padre con la nueva posición
                 msg.mensaje[0] = actualPosition;
                 msg.mensaje[2] = 0;
                 msg.mensaje[3] = 0;
@@ -115,11 +122,12 @@ int main(int argc, char *argv[]) {
 
                 msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
 
-                //Analizar la regex
+                //Analiza la regex
                 regoff_t len;
                 char* tokens = strtok(buffer, "\n");
 
                 while (tokens != NULL) {
+                    //Si hay una coincidencia, envía el mensaje al pintor
                     if (regexec(&regex, tokens, 0, NULL, 0)==0) {
                         msg.mensaje[2] = 0;
                         msg.mensaje[1] = 0;
@@ -127,9 +135,8 @@ int main(int argc, char *argv[]) {
                         msg.mensaje[4] = i;
                         msg.type = 440;
 
-                        // Copiamos el contenido al mensaje para que el padre lo imprima
+                        //Copiamos el contenido al mensaje para que el pintor lo imprima
                         memset(msg.contenido, 0, sizeof(msg.contenido));
-
                         strcpy(msg.contenido, tokens);
 
                         msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
@@ -138,7 +145,7 @@ int main(int argc, char *argv[]) {
                     tokens = strtok(NULL, "\n");
                 }
 
-                //Hijo listo para volver a leer
+                //Envía un mensaje al padre avisando que terminó de analizar
                 msg.mensaje[2] = 0;
                 msg.mensaje[1] = 0;
                 msg.mensaje[3] = 1;
@@ -146,19 +153,25 @@ int main(int argc, char *argv[]) {
                 msg.type = 100;
 
                 msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
+
+                //El hijo queda listo para volver a leer
             }
         }
     }
     
     //El padre
     int i = 1;
+
+    //Envía al hijo un mensaje para que lea desde la posición 0
     msg.type = i;
     msg.mensaje[0] = actualPosition;
     msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), IPC_NOWAIT);
-    int trabajando = 1;
-    int hijosTrabajando = 1;
+
+    int trabajando = 1; //El padre aún debe coordinar la lectura
+    int hijosTrabajando = 1; //Algún hijo aún está analizando
 
     while (trabajando == 1 || hijosTrabajando == 1) {
+        //Recibe mensajes de los hijos
         msgrcv(msqid, &msg, sizeof(msg), 100, 0);
 
         if (msg.mensaje[1] == 1) { //El archivo se terminó de leer
@@ -171,7 +184,7 @@ int main(int argc, char *argv[]) {
                     hijosTrabajando = 1;
                 }
             }
-        } else { //Coordina la lectura del archivo
+        } else { //Manda al siguiente hijo a leer
             hijos[i - 1] = 1;
             i++;
             if (i == NUM_PROCESS) {
@@ -201,6 +214,7 @@ int main(int argc, char *argv[]) {
     msg.mensaje[1] = 1;
     msgsnd(msqid, (void *)&msg, sizeof(msg) - sizeof(long), 0);
 
+    //Espera a que el pintor termine
     wait(&status);
 
     //El padre termina
