@@ -64,12 +64,14 @@ int main(int argc, char *argv[]) {
                 int bandera = 1;
 
                 while (bandera == 1){
+                    //Recibe mensajes de su tipo exclusivo
                     if (msgrcv(msqid, &msg, sizeof(msg), 440, IPC_NOWAIT) != -1){
+                        //Esto ocurre si el padre lo manda a terminar
                         if (msg.mensaje[1] == 1) {
                             bandera = 0;
                         }
                         printf("%s\n", msg.contenido);
-                        msgctl(msqid,IPC_STAT,&info);
+                        msgctl(msqid, IPC_STAT, &info);
                     }
                 }
 
