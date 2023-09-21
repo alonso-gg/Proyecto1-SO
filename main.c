@@ -10,7 +10,7 @@
 #include <errno.h>
 
 #define MSG_SIZE 128
-#define NUM_PROCESS 10
+#define NUM_PROCESS 6
 #define BUFFER_SIZE 8192
 #define ARRAY_SIZE(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
             char *finalLinea = buffer;
             char *inicioArchivo = buffer;
             while (1) {
-                //Espera mensaje para leer
+                //Espera un mensaje para leer
                 msgrcv(msqid, &msg, sizeof(msg), i, 0);
 
                 //Si ya se terminó de leer todo el archivo, el hijo se sale
